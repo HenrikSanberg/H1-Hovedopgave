@@ -200,4 +200,25 @@ window.onload = function() {
                             skjulBtn.classList.remove("skjult-aktiv");
                             alleUnderSkjulKnapper.forEach(function(k) { k.classList.remove("skjult-aktiv"); });
                         };
+                        header.onclick = function() {
+                            if (underDele.length > 0) {
+                                underListe.classList.toggle("aaben");
+                                pil.classList.toggle("aaben");
+                            }
+                        };
+
+                        if (underDele.length > 0) {
+                            boks.appendChild(underListe);
+                        }
+                        navTree.appendChild(boks);
+                    });
+                });
+            });
+        }
+    });
+};
+</script>
+
+</body>
+</html>
 
