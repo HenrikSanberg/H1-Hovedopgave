@@ -4,93 +4,16 @@
   <meta charset="UTF-8">
   <script type="text/javascript" src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 10px;
-      background-color: #f8f9fa;
-      color: #333;
-    }
-    .container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 15px;
-    }
-    .viewer-box {
-      flex: 2;
-      min-width: 300px;
-    }
-    iframe {
-      width: 100%;
-      height: 500px;
-      border: none;
-      border-radius: 8px;
-      background-color: #e9ecef;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-    }
-    .sidebar {
-      flex: 1;
-      min-width: 260px;
-      max-height: 500px;
-      overflow-y: auto;
-      background: white;
-      padding: 15px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-    }
-    h3 {
-      margin-top: 0;
-      font-size: 16px;
-      border-bottom: 2px solid #eee;
-      padding-bottom: 8px;
-    }
-    ul {
-      list-style-type: none;
-      padding-left: 15px;
-      margin: 5px 0;
-    }
-    #myUL {
-      padding-left: 0;
-    }
-    li {
-      margin: 6px 0;
-      font-size: 13px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 5px;
-    }
-    .caret {
-      cursor: pointer;
-      user-select: none;
-      font-weight: bold;
-    }
-    .caret::before {
-      content: "\25B6";
-      color: #555;
-      display: inline-block;
-      margin-right: 6px;
-      font-size: 10px;
-    }
-    .caret-down::before {
-      transform: rotate(90deg);
-    }
-    .nested {
-      display: none;
-      width: 100%;
-    }
-    .active {
-      display: block;
-    }
-    button {
-      padding: 3px 8px;
-      border: none;
-      border-radius: 4px;
-      color: white;
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: bold;
-    }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; color: #333; }
+    .container { display: flex; flex-wrap: wrap; gap: 15px; }
+    .viewer-box { flex: 2; min-width: 300px; }
+    iframe { width: 100%; height: 500px; border: none; border-radius: 8px; background-color: #e9ecef; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
+    .sidebar { flex: 1; min-width: 260px; max-height: 500px; overflow-y: auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    h3 { margin-top: 0; font-size: 16px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
+    .lag-raekke { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .lag-navn { font-weight: 500; padding-right: 10px; word-break: break-word; }
+    .knapper { display: flex; gap: 4px; flex-shrink: 0; }
+    button { padding: 4px 8px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 11px; font-weight: bold; }
     .Skjul { background-color: #28a745; }
     .Vis { background-color: #007bff; }
     button:hover { opacity: 0.85; }
@@ -100,12 +23,12 @@
 
 <div class="container">
   <div class="viewer-box">
-    <iframe id="api-frame" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen mozallowfullscreen="true" webkitallowfullscreen="true"></iframe>
+    <iframe id="api-frame" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe>
   </div>
 
   <div class="sidebar">
     <h3>Bygningsdele / Lag</h3>
-    <div id="navTree">Forbinder til Sketchfab...</div>
+    <div id="navTree">Starter 3D-visning...</div>
   </div>
 </div>
 
@@ -114,173 +37,93 @@ var uid = "a7ad25ee7cf64da094be4fb88a0e8bd8";
 
 window.onload = function() {
     var navTree = document.getElementById("navTree");
-    
-    if (typeof window.Sketchfab === "undefined") {
-        navTree.innerHTML = "<span style='color:red;'>Kunne ikke hente Sketchfab-scriptet.</span>";
-        return;
-    }
-
-    var version = "1.12.1";
     var iframe = document.getElementById("api-frame");
-    var client = new window.Sketchfab(version, iframe);
-    var officialNodes = [];
+    var client = new window.Sketchfab("1.12.1", iframe);
 
-    var error = function () {
-        navTree.innerHTML = "<span style='color:red;'>Kunne ikke hente modellen. Tjek at modellen er sat til 'Public' eller 'Unlisted' på Sketchfab.</span>";
-    };
+    client.init(uid, {
+        autostart: 1,
+        preload: 1,
+        success: function(api) {
+            navTree.innerHTML = "Forbundet – venter på 3D-model...";
+            api.start();
+            api.addEventListener("viewerready", function() {
+                navTree.innerHTML = "Henter bygningsdele...";
+                
+                api.getSceneGraph(function(err, result) {
+                    if (err) {
+                        navTree.innerHTML = "Fejl ved hentning af lag.";
+                        return;
+                    }
+                    
+                    navTree.innerHTML = "";
+                    var fundet = 0;
 
-    function recurse(node, parentID) {
-        if (!node) return;
-        var hasChildren = node.children && node.children.length > 0;
-        var isTechnical = !node.name || node.name === "RootNode" || node.name === "root" || node.name.startsWith("GLTF") || node.name.startsWith("SketchUp");
+                    function findLag(node) {
+                        if (!node) return;
+                        
+                        // Vis alle grupper og dele der har et rigtigt navn
+                        var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model"];
+                        var erGyldig = node.name && 
+                                       ignorer.indexOf(node.name) === -1 && 
+                                       !node.name.startsWith("Mesh") && 
+                                       !node.name.startsWith("Geometry") &&
+                                       (node.type === "MatrixTransform" || node.type === "Group");
 
-        if (!isTechnical) {
-            officialNodes.push({
-                instanceID: node.instanceID,
-                name: node.name,
-                parentID: parentID,
-                isParent: hasChildren
-            });
-        }
+                        if (erGyldig) {
+                            fundet++;
+                            var raekke = document.createElement("div");
+                            raekke.className = "lag-raekke";
 
-        if (hasChildren) {
-            var nextParent = isTechnical ? parentID : node.instanceID;
-            for (var i = 0; i < node.children.length; i++) {
-                recurse(node.children[i], nextParent);
-            }
-        }
-    }
+                            var navn = document.createElement("span");
+                            navn.className = "lag-navn";
+                            navn.innerText = node.name.replace(/_/g, " ");
 
-    var success = function (api) {
-        navTree.innerHTML = "Indlæser lag...";
-        api.start(function () {
-            api.addEventListener("viewerready", function () {
-                api.getNodeMap(function (err, nodes) {
-                    if (!err) {
-                        officialNodes = [];
-                        var rootNode = null;
+                            var knapBoks = document.createElement("div");
+                            knapBoks.className = "knapper";
 
-                        for (var instanceID in nodes) {
-                            var node = nodes[instanceID];
-                            if (node.type === "MatrixTransform" || node.type === "Group") {
-                                rootNode = node;
-                                break;
+                            var hideBtn = document.createElement("button");
+                            hideBtn.className = "Skjul";
+                            hideBtn.innerText = "Skjul";
+                            hideBtn.onclick = function() {
+                                api.hide(node.instanceID);
+                                hideBtn.style.backgroundColor = "#dc3545";
+                            };
+
+                            var showBtn = document.createElement("button");
+                            showBtn.className = "Vis";
+                            showBtn.innerText = "Vis";
+                            showBtn.onclick = function() {
+                                api.show(node.instanceID);
+                                hideBtn.style.backgroundColor = "#28a745";
+                            };
+
+                            knapBoks.appendChild(hideBtn);
+                            knapBoks.appendChild(showBtn);
+                            raekke.appendChild(navn);
+                            raekke.appendChild(knapBoks);
+                            navTree.appendChild(raekke);
+                        }
+
+                        if (node.children && node.children.length > 0) {
+                            for (var i = 0; i < node.children.length; i++) {
+                                findLag(node.children[i]);
                             }
                         }
+                    }
 
-                        if (rootNode) {
-                            recurse(rootNode, null);
-                        }
+                    findLag(result);
 
-                        if (officialNodes.length > 0) {
-                            generateTree(api);
-                        } else {
-                            navTree.innerHTML = "Ingen navngivne lag fundet i modellen.";
-                        }
+                    if (fundet === 0) {
+                        navTree.innerHTML = "Ingen navngivne grupper fundet i modellen.";
                     }
                 });
             });
-        });
-    };
-
-
-    client.init(uid, {
-        success: success,
-        error: error,
-        autostart: 1,
-        preload: 1,
-        transparent: 0
+        },
+        error: function() {
+            navTree.innerHTML = "Kunne ikke indlæse modellen.";
+        }
     });
 };
-
-function generateTree(api) {
-    var tree = unflatten(officialNodes);
-    var navTree = document.getElementById("navTree");
-    navTree.innerHTML = "";
-    navTree.appendChild(to_ul(tree, api, "myUL"));
-
-    var toggler = document.getElementsByClassName("caret");
-    for (var i = 0; i < toggler.length; i++) {
-        toggler[i].addEventListener("click", function () {
-            var nested = this.parentElement.querySelector(".nested");
-            if (nested) {
-                nested.classList.toggle("active");
-                this.classList.toggle("caret-down");
-            }
-        });
-    }
-}
-
-function unflatten(arr) {
-    var tree = [], mappedArr = {}, arrElem, mappedElem;
-
-    for (var i = 0, len = arr.length; i < len; i++) {
-        arrElem = arr[i];
-        mappedArr[arrElem.instanceID] = arrElem;
-        mappedArr[arrElem.instanceID].children = [];
-    }
-
-    for (var id in mappedArr) {
-        if (mappedArr.hasOwnProperty(id)) {
-            mappedElem = mappedArr[id];
-            if (mappedElem.parentID && mappedArr[mappedElem.parentID]) {
-                mappedArr[mappedElem.parentID].children.push(mappedElem);
-            } else {
-                tree.push(mappedElem);
-            }
-        }
-    }
-    return tree;
-}
-
-function to_ul(branches, api, setID = "", setClass = "") {
-    var outerul = document.createElement("ul");
-    if (setID !== "") outerul.id = setID;
-    if (setClass !== "") outerul.className = setClass;
-
-    for (var i = 0; i < branches.length; i++) {
-        var branch = branches[i];
-        var li = document.createElement("li");
-
-        var text = branch.name.replace(/_/g, " ");
-        if (text.length > 22) text = text.substring(0, 22) + "...";
-
-        var sp = document.createElement("span");
-        sp.className = (branch.children && branch.children.length > 0) ? "caret" : "caret_child";
-        sp.appendChild(document.createTextNode(text));
-        li.appendChild(sp);
-
-        var hideBtn = document.createElement("button");
-        hideBtn.className = "Skjul";
-        hideBtn.innerText = "Skjul";
-        hideBtn.onclick = (function(id, btn) {
-            return function() {
-                api.hide(id);
-                btn.style.backgroundColor = "#dc3545";
-            };
-        })(branch.instanceID, hideBtn);
-
-        var showBtn = document.createElement("button");
-        showBtn.className = "Vis";
-        showBtn.innerText = "Vis";
-        showBtn.onclick = (function(id, hBtn) {
-            return function() {
-                api.show(id);
-                hBtn.style.backgroundColor = "#28a745";
-            };
-        })(branch.instanceID, hideBtn);
-
-        li.appendChild(hideBtn);
-        li.appendChild(showBtn);
-
-        if (branch.children && branch.children.length > 0) {
-            li.appendChild(to_ul(branch.children, api, "", "nested"));
-        }
-
-        outerul.appendChild(li);
-    }
-    return outerul;
-}
 </script>
 
 </body>
