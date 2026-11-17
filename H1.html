@@ -132,8 +132,9 @@ window.onload = function() {
     function recurse(node, parentID) {
         if (!node) return;
         var hasChildren = node.children && node.children.length > 0;
-        
-        if (node.name && node.name !== "RootNode" && node.name !== "root" && !node.name.startsWith("GLTF")) {
+        var isTechnical = !node.name || node.name === "RootNode" || node.name === "root" || node.name.startsWith("GLTF") || node.name.startsWith("SketchUp");
+
+        if (!isTechnical) {
             officialNodes.push({
                 instanceID: node.instanceID,
                 name: node.name,
@@ -143,14 +144,15 @@ window.onload = function() {
         }
 
         if (hasChildren) {
+            var nextParent = isTechnical ? parentID : node.instanceID;
             for (var i = 0; i < node.children.length; i++) {
-                recurse(node.children[i], node.instanceID);
+                recurse(node.children[i], nextParent);
             }
         }
     }
 
     var success = function (api) {
-        navTree.innerHTML = "Indlæser 3D-model og lag...";
+        navTree.innerHTML = "Indlæser lag...";
         api.start(function () {
             api.addEventListener("viewerready", function () {
                 api.getNodeMap(function (err, nodes) {
@@ -160,7 +162,7 @@ window.onload = function() {
 
                         for (var instanceID in nodes) {
                             var node = nodes[instanceID];
-                            if (node.name === "RootNode" || node.name === "root") {
+                            if (node.type === "MatrixTransform" || node.type === "Group") {
                                 rootNode = node;
                                 break;
                             }
@@ -168,15 +170,19 @@ window.onload = function() {
 
                         if (rootNode) {
                             recurse(rootNode, null);
+                        }
+
+                        if (officialNodes.length > 0) {
                             generateTree(api);
                         } else {
-                            navTree.innerHTML = "Modellen er indlæst, men ingen lag blev fundet.";
+                            navTree.innerHTML = "Ingen navngivne lag fundet i modellen.";
                         }
                     }
                 });
             });
         });
     };
+
 
     client.init(uid, {
         success: success,
