@@ -1,73 +1,287 @@
-<!DOCTYPE html>
-<html lang="da">
-<head>
-  <meta charset="UTF-8">
-  <script type="text/javascript" src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f6f8; color: #333; }
-    .container { display: flex; flex-wrap: wrap; gap: 20px; }
-    .viewer-box { flex: 2; min-width: 320px; }
-    iframe { width: 100%; height: 550px; border: none; border-radius: 8px; background-color: #e9ecef; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
-    .sidebar { flex: 1; min-width: 300px; max-height: 550px; overflow-y: auto; background: transparent; }
-    .hoved-gruppe { background: #e9ecef; border-radius: 6px; margin-bottom: 10px; border: 1px solid #d1d5db; overflow: hidden; }
-    .hoved-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; font-weight: bold; font-size: 14px; cursor: pointer; user-select: none; }
-    .hoved-header:hover { background: #dfe3e8; }
-    .pil { display: inline-block; margin-right: 8px; transition: transform 0.2s; font-size: 12px; }
-    .pil.aaben { transform: rotate(90deg); }
-    .under-liste { display: none; background: #ffffff; padding: 5px 15px 10px 25px; border-top: 1px solid #d1d5db; }
-    .under-liste.aaben { display: block; }
-    .under-raekke { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-    .under-raekke:last-child { border-bottom: none; }
-    .knapper { display: flex; gap: 6px; flex-shrink: 0; }
-    button { padding: 6px 14px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px; font-weight: bold; }
-    .under-raekke button { padding: 4px 10px; font-size: 11px; }
-    .Vis { background-color: #007bff; }
-    .Skjul { background-color: #28a745; }
-    .Skjul.skjult-aktiv { background-color: #dc3545; }
-    button:hover { opacity: 0.85; }
-  </style>
-</head>
-<body>
-<div class="container">
-  <div class="viewer-box">
-    <iframe id="api-frame" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe>
-  </div>
-  <div class="sidebar">
-    <div id="navTree">Indlæser bygningsdele...</div>
-  </div>
-</div>
-<script>
-var uid = "a7ad25ee7cf64da094be4fb88a0e8bd8"; 
-var navTree = document.getElementById("navTree");
-var iframe = document.getElementById("api-frame");
-var client = new window.Sketchfab("1.12.1", iframe);
+var version = "1.9.0";
+var uid = "a7ad25ee7cf64da094be4fb88a0e8bd8"; // Standardmodel ID
 
-client.init(uid, {
-    autostart: 1,
-    preload: 1,
-    success: function(api) {
-        api.start();
-        api.addEventListener("viewerready", function() {
-            api.getSceneGraph(function(err, result) {
-                if (err) { navTree.innerHTML = "Fejl: " + err; return; }
-                var tekst = "<b>Struktur i din 3ds Max-fil:</b><br><br>";
-                function visAlt(n, dybde) {
-                    if (!n || dybde > 4) return;
-                    var indryk = "&nbsp;&nbsp;&nbsp;&nbsp;".repeat(dybde);
-                    tekst += indryk + "• <b>" + (n.name || "[uden navn]") + "</b> <i>(" + n.type + ")</i><br>";
-                    if (n.children) {
-                        for (var i = 0; i < n.children.length; i++) {
-                            visAlt(n.children[i], dybde + 1);
-                        }
+// Funktion til at opdatere uid dynamisk baseret på brugerinput
+function updateUID() {
+    var newUID = document.getElementById('modelID').value;
+    if (newUID) {
+        // Opdater uid med brugerinput
+        uid = newUID;
+
+        // Genstart Sketchfab klienten med det nye UID
+        client.init(uid, {
+            success: success,
+            error: error,
+            autostart: 1,
+            preload: 1,
+            autospin: autoSpin,
+            transparent: 0
+        });
+
+        console.log("Model ID opdateret til: " + uid);
+    } else {
+        alert("Indtast venligst et gyldigt model ID.");
+    }
+}
+
+var urlParams = new URLSearchParams(window.location.search);
+var autoSpin = 0.0;
+
+if (urlParams.has("autospin")) {
+    autoSpin = urlParams.get("autospin");
+}
+
+if (urlParams.has("id")) {
+    uid = urlParams.get("id");
+}
+
+var iframe = document.getElementById("api-frame");
+var client = new window.Sketchfab(version, iframe);
+var treeText = "";
+
+var error = function () {
+    console.error("Sketchfab API error");
+};
+
+var idxNodes = 0;
+var myNodesByNameFromMap = {};
+var officialNodes = [];
+var objectID = -1;
+
+var success = function (api) {
+    api.start(function () {
+        api.addEventListener("viewerready", function () {
+
+            // Hent Scene Graph eller Node Map igen for den nye model
+            api.getNodeMap(function (err, nodes) {
+                if (!err) {
+                    myNodesByNameFromMap = {}; // Nulstil nodelisten for den nye model
+                    for (var instanceID in nodes) {
+                        var node = nodes[instanceID];
+                        var name = node.name || "noname_" + idxNodes++;
+                        myNodesByNameFromMap[name] = node;
+                    }
+
+                    // Forsøg at finde 'RootNode' eller 'root' som før
+                    var rootNodeTree = myNodesByNameFromMap["RootNode"] || myNodesByNameFromMap["root"];
+
+                    if (rootNodeTree) {
+                        recurse(rootNodeTree, rootNodeTree.children.length, 0);
+
+                        // Generer knapperne igen for den nye model
+                        generateTree();
+                    }
+
+                    // Tilføj event listeners igen til knapperne "Skjul" og "Vis"
+                    var hideButtons = document.getElementsByClassName("Skjul");
+                    for (let i = 0; i < hideButtons.length; i++) {
+                        hideButtons[i].addEventListener("click", function () {
+                            this.style.backgroundColor = "red";
+                            var childButtons = document
+                                .getElementById(this.value)
+                                .getElementsByClassName("Skjul");
+
+                            if (childButtons.length === 0) {
+                                api.hide(this.value);
+                            }
+
+                            for (let j = 0; j < childButtons.length; j++) {
+                                var hideBTN = document.getElementById(childButtons[j].id);
+                                hideBTN.style.backgroundColor = "red";
+                                api.hide(hideBTN.value);
+                            }
+                        });
+                    }
+
+                    var showButtons = document.getElementsByClassName("Vis");
+                    for (let k = 0; k < showButtons.length; k++) {
+                        showButtons[k].addEventListener("click", function () {
+                            api.show(this.value);
+                            var hideBTN = document.getElementById(this.id + "_" + this.name + "Skjul");
+                            hideBTN.style.backgroundColor = "green";
+
+                            var childButtons = document
+                                .getElementById(this.value)
+                                .getElementsByClassName("Vis");
+                            for (let l = 0; l < childButtons.length; l++) {
+                                api.show(childButtons[l].value);
+                                hideBTN = document.getElementById(childButtons[l].id + "_Skjul");
+                                hideBTN.style.backgroundColor = "green";
+                            }
+                        });
                     }
                 }
-                visAlt(result, 0);
-                navTree.innerHTML = tekst;
             });
         });
-    }
+    });
+};
+
+client.init(uid, {
+    success: success,
+    error: error,
+    autostart: 1,
+    preload: 1,
+    autospin: autoSpin,
+    transparent: 0
 });
 
-</script>
-</body>
-</html>
+//////////////////////////////////
+// GUI Code
+//////////////////////////////////
+
+function generateTree() {
+    var tree = unflatten(officialNodes);
+    var navTree = document.getElementById("navTree");
+    navTree.innerHTML = ""; // Tøm navigationstræet før generering af nyt
+    navTree.appendChild(to_ul(tree, "myUL"));
+
+    var toggler = document.getElementsByClassName("caret");
+    for (var i = 0; i < toggler.length; i++) {
+        toggler[i].addEventListener("click", function () {
+            this.parentElement.querySelector(".nested").classList.toggle("active");
+            this.classList.toggle("caret-down");
+        });
+    }
+}
+
+function unflatten(arr) {
+    var tree = [],
+        mappedArr = {},
+        arrElem,
+        mappedElem;
+
+    for (var i = 0, len = arr.length; i < len; i++) {
+        arrElem = arr[i];
+        mappedArr[arrElem.instanceID] = arrElem;
+        mappedArr[arrElem.instanceID].children = [];
+    }
+
+    for (var id in mappedArr) {
+        if (mappedArr.hasOwnProperty(id)) {
+            mappedElem = mappedArr[id];
+            if (mappedElem.parentID) {
+                mappedArr[mappedElem.parentID].children.push(mappedElem);
+            } else {
+                tree.push(mappedElem);
+            }
+        }
+    }
+    return tree;
+}
+
+function to_ul(branches, setID = "", setClass = "") {
+    var outerul = document.createElement("ul");
+    var lengthOfName = 25;
+
+    if (setID != "") {
+        outerul.id = setID;
+    }
+    if (setClass != "") {
+        outerul.className = setClass;
+    }
+
+    for (var i = 0, n = branches.length; i < n; i++) {
+        var branch = branches[i];
+        var li = document.createElement("li");
+
+        var text = branch.name.replace(/_/g, " ");
+        if (text.length > lengthOfName) {
+            text = text.substring(0, lengthOfName);
+            text += "...";
+        }
+        var textNode = document.createTextNode(text);
+
+        if (branch.isParent) {
+            var sp = document.createElement("span");
+            sp.className = "caret";
+            sp.appendChild(textNode);
+            li.appendChild(sp);
+            li.appendChild(createButton("Hide", branch.instanceID, branch.name));
+            li.appendChild(createButton("Show", branch.instanceID, branch.name));
+        } else {
+            var sp2 = document.createElement("span");
+            sp2.className = "caret_child";
+            sp2.appendChild(textNode);
+            li.appendChild(sp2);
+            li.appendChild(createButton("Hide", branch.instanceID, branch.name));
+            li.appendChild(createButton("Show", branch.instanceID, branch.name));
+        }
+
+        if (branch.children) {
+            li.appendChild(to_ul(branch.children, branch.instanceID, "nested"));
+        }
+
+        outerul.appendChild(li);
+    }
+
+    return outerul;
+}
+
+function createButton(btnType, instance, name) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+	
+	// Erstat danske tegn med Unicode-escape-sekvenser
+    var nameWithUnicode = name.replace(/Æ/g, '\u00C6')
+                              .replace(/Ø/g, '\u00D8')
+                              .replace(/Å/g, '\u00C5');
+	
+	 // URL-encode navnet for at sikre, at det understøtter specialtegn som Æ, Ø, Å
+    var encodedName = encodeURIComponent(name);
+
+    // Ændrer teksten fra "Hide" til "Skjul" og "Show" til "Vis"
+    if (btnType == "Hide") {
+        btn.className = "Skjul";
+        btn.id = instance + "_" + name + "_" + "Skjul";
+        btn.style.backgroundColor = "green";
+        var btnText = document.createTextNode("Skjul");
+    } else {
+        btn.className = "Vis";
+        btn.id = instance + "_" + name;
+        var btnText = document.createTextNode("Vis");
+    }
+    
+    btn.value = instance;
+    btn.appendChild(btnText);
+
+    return btn;
+}
+
+
+function recurse(nodeTree, childCount, theParentID) {
+    if (typeof nodeTree != "undefined") {
+        for (var i = 0; i < childCount; i++) {
+            var node = {
+                name: nodeTree.children[i].name,
+                type: nodeTree.children[i].type,
+                instanceID: nodeTree.children[i].instanceID,
+                isParent: false,
+                parentID: theParentID
+            };
+
+            if (node.type == "MatrixTransform") {
+                node.isParent = isParent(nodeTree.children[i].children);
+                officialNodes.push(node);
+
+                recurse(
+                    nodeTree.children[i],
+                    nodeTree.children[i].children.length,
+                    nodeTree.children[i].instanceID
+                );
+            }
+        }
+    }
+}
+
+function isParent(children) {
+    var result = false;
+
+    for (var i = 0; i < children.length; i++) {
+        if (children[i].type == "MatrixTransform") {
+            result = true;
+            break;
+        }
+    }
+
+    return result;
+}
