@@ -4,18 +4,32 @@
   <meta charset="UTF-8">
   <script type="text/javascript" src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background-color: #f8f9fa; color: #333; }
-    .container { display: flex; flex-wrap: wrap; gap: 15px; }
-    .viewer-box { flex: 2; min-width: 300px; }
-    iframe { width: 100%; height: 500px; border: none; border-radius: 8px; background-color: #e9ecef; box-shadow: 0 2px 6px rgba(0,0,0,0.15); }
-    .sidebar { flex: 1; min-width: 260px; max-height: 500px; overflow-y: auto; background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    h3 { margin-top: 0; font-size: 16px; border-bottom: 2px solid #eee; padding-bottom: 8px; }
-    .lag-raekke { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-    .lag-navn { font-weight: 500; padding-right: 10px; word-break: break-word; }
-    .knapper { display: flex; gap: 4px; flex-shrink: 0; }
-    button { padding: 4px 8px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 11px; font-weight: bold; }
-    .Skjul { background-color: #28a745; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f6f8; color: #333; }
+    .container { display: flex; flex-wrap: wrap; gap: 20px; }
+    .viewer-box { flex: 2; min-width: 320px; }
+    iframe { width: 100%; height: 550px; border: none; border-radius: 8px; background-color: #e9ecef; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .sidebar { flex: 1; min-width: 300px; max-height: 550px; overflow-y: auto; background: transparent; }
+    
+    /* Hovedgrupper (VINDUE, KONSTRUKTION osv.) */
+    .hoved-gruppe { background: #e9ecef; border-radius: 6px; margin-bottom: 10px; border: 1px solid #d1d5db; overflow: hidden; }
+    .hoved-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; font-weight: bold; font-size: 14px; cursor: pointer; user-select: none; }
+    .hoved-header:hover { background: #dfe3e8; }
+    .pil { display: inline-block; margin-right: 8px; transition: transform 0.2s; font-size: 12px; }
+    .pil.aaben { transform: rotate(90deg); }
+    
+    /* Undergrupper (foldes ud) */
+    .under-liste { display: none; background: #ffffff; padding: 5px 15px 10px 25px; border-top: 1px solid #d1d5db; }
+    .under-liste.aaben { display: block; }
+    .under-raekke { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .under-raekke:last-child { border-bottom: none; }
+    
+    /* Knapper */
+    .knapper { display: flex; gap: 6px; flex-shrink: 0; }
+    button { padding: 6px 14px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .under-raekke button { padding: 4px 10px; font-size: 11px; }
     .Vis { background-color: #007bff; }
+    .Skjul { background-color: #28a745; }
+    .Skjul.skjult-aktiv { background-color: #dc3545; }
     button:hover { opacity: 0.85; }
   </style>
 </head>
@@ -27,8 +41,7 @@
   </div>
 
   <div class="sidebar">
-    <h3>Bygningsdele / Lag</h3>
-    <div id="navTree">Starter 3D-visning...</div>
+    <div id="navTree">Indlæser bygningsdele...</div>
   </div>
 </div>
 
@@ -44,11 +57,8 @@ window.onload = function() {
         autostart: 1,
         preload: 1,
         success: function(api) {
-            navTree.innerHTML = "Forbundet – venter på 3D-model...";
             api.start();
             api.addEventListener("viewerready", function() {
-                navTree.innerHTML = "Henter bygningsdele...";
-                
                 api.getSceneGraph(function(err, result) {
                     if (err) {
                         navTree.innerHTML = "Fejl ved hentning af lag.";
@@ -56,75 +66,138 @@ window.onload = function() {
                     }
                     
                     navTree.innerHTML = "";
-                    var fundet = 0;
+                    var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model"];
 
-                    function findLag(node) {
-                        if (!node) return;
-                        
-                        // Vis alle grupper og dele der har et rigtigt navn
-                        var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model"];
-                        var erGyldig = node.name && 
-                                       ignorer.indexOf(node.name) === -1 && 
-                                       !node.name.startsWith("Mesh") && 
-                                       !node.name.startsWith("Geometry") &&
-                                       (node.type === "MatrixTransform" || node.type === "Group");
-
-                        if (erGyldig) {
-                            fundet++;
-                            var raekke = document.createElement("div");
-                            raekke.className = "lag-raekke";
-
-                            var navn = document.createElement("span");
-                            navn.className = "lag-navn";
-                            navn.innerText = node.name.replace(/_/g, " ");
-
-                            var knapBoks = document.createElement("div");
-                            knapBoks.className = "knapper";
-
-                            var hideBtn = document.createElement("button");
-                            hideBtn.className = "Skjul";
-                            hideBtn.innerText = "Skjul";
-                            hideBtn.onclick = function() {
-                                api.hide(node.instanceID);
-                                hideBtn.style.backgroundColor = "#dc3545";
-                            };
-
-                            var showBtn = document.createElement("button");
-                            showBtn.className = "Vis";
-                            showBtn.innerText = "Vis";
-                            showBtn.onclick = function() {
-                                api.show(node.instanceID);
-                                hideBtn.style.backgroundColor = "#28a745";
-                            };
-
-                            knapBoks.appendChild(hideBtn);
-                            knapBoks.appendChild(showBtn);
-                            raekke.appendChild(navn);
-                            raekke.appendChild(knapBoks);
-                            navTree.appendChild(raekke);
-                        }
-
-                        if (node.children && node.children.length > 0) {
-                            for (var i = 0; i < node.children.length; i++) {
-                                findLag(node.children[i]);
+                    // Find selve hovedmappen (springer .fbx-filnavnet over)
+                    function findHovedGrupper(node) {
+                        if (!node || !node.children) return [];
+                        var gyldige = [];
+                        for (var i = 0; i < node.children.length; i++) {
+                            var barn = node.children[i];
+                            var erTeknisk = !barn.name || ignorer.indexOf(barn.name) !== -1 || barn.name.toLowerCase().endsWith(".fbx") || barn.name.startsWith("Mesh") || barn.name.startsWith("Geometry");
+                            if (!erTeknisk && (barn.type === "MatrixTransform" || barn.type === "Group")) {
+                                gyldige.push(barn);
+                            } else if (barn.children) {
+                                gyldige = gyldige.concat(findHovedGrupper(barn));
                             }
                         }
+                        return gyldige;
                     }
 
-                    findLag(result);
-
-                    if (fundet === 0) {
-                        navTree.innerHTML = "Ingen navngivne grupper fundet i modellen.";
+                    // Hent unikke underdele uden dubletter
+                    function findUnderDele(node) {
+                        var liste = [];
+                        var seteNavne = {};
+                        
+                        function gennemsog(n) {
+                            if (!n || !n.children) return;
+                            for (var i = 0; i < n.children.length; i++) {
+                                var b = n.children[i];
+                                if (b.name && !b.name.startsWith("Mesh") && !b.name.startsWith("Geometry") && (b.type === "MatrixTransform" || b.type === "Group")) {
+                                    var rentNavn = b.name.replace(/_/g, " ").trim();
+                                    if (!seteNavne[rentNavn]) {
+                                        seteNavne[rentNavn] = { navn: rentNavn, ids: [] };
+                                        liste.push(seteNavn[rentNavn]);
+                                    }
+                                    seteNavne[rentNavn].ids.push(b.instanceID);
+                                } else {
+                                    gennemsog(b);
+                                }
+                            }
+                        }
+                        gennemsog(node);
+                        return liste;
                     }
-                });
-            });
-        },
-        error: function() {
-            navTree.innerHTML = "Kunne ikke indlæse modellen.";
-        }
-    });
-};
-</script>
 
-</body>
-</html>
+                    var hovedGrupper = findHovedGrupper(result);
+
+                    hovedGrupper.forEach(function(gruppe) {
+                        var boks = document.createElement("div");
+                        boks.className = "hoved-gruppe";
+
+                        var header = document.createElement("div");
+                        header.className = "hoved-header";
+
+                        var titel = document.createElement("span");
+                        var pil = document.createElement("span");
+                        pil.className = "pil";
+                        pil.innerHTML = "&#9654;"; // Pil til højre
+                        titel.appendChild(pil);
+                        titel.appendChild(document.createTextNode(gruppe.name.replace(/_/g, " ").toUpperCase()));
+
+                        var knapBoks = document.createElement("div");
+                        knapBoks.className = "knapper";
+
+                        var visBtn = document.createElement("button");
+                        visBtn.className = "Vis";
+                        visBtn.innerText = "Vis";
+
+                        var skjulBtn = document.createElement("button");
+                        skjulBtn.className = "Skjul";
+                        skjulBtn.innerText = "Skjul";
+
+                        knapBoks.appendChild(visBtn);
+                        knapBoks.appendChild(skjulBtn);
+                        header.appendChild(titel);
+                        header.appendChild(knapBoks);
+                        boks.appendChild(header);
+
+                        // Underliste
+                        var underListe = document.createElement("div");
+                        underListe.className = "under-liste";
+                        var underDele = findUnderDele(gruppe);
+                        var alleUnderSkjulKnapper = [];
+
+                        underDele.forEach(function(del) {
+                            var raekke = document.createElement("div");
+                            raekke.className = "under-raekke";
+
+                            var delNavn = document.createElement("span");
+                            delNavn.innerText = del.navn;
+
+                            var uKnapper = document.createElement("div");
+                            uKnapper.className = "knapper";
+
+                            var uVis = document.createElement("button");
+                            uVis.className = "Vis";
+                            uVis.innerText = "Vis";
+
+                            var uSkjul = document.createElement("button");
+                            uSkjul.className = "Skjul";
+                            uSkjul.innerText = "Skjul";
+                            alleUnderSkjulKnapper.push(uSkjul);
+
+                            uSkjul.onclick = function(e) {
+                                e.stopPropagation();
+                                del.ids.forEach(function(id) { api.hide(id); });
+                                uSkjul.classList.add("skjult-aktiv");
+                            };
+
+                            uVis.onclick = function(e) {
+                                e.stopPropagation();
+                                del.ids.forEach(function(id) { api.show(id); });
+                                uSkjul.classList.remove("skjult-aktiv");
+                            };
+
+                            uKnapper.appendChild(uVis);
+                            uKnapper.appendChild(uSkjul);
+                            raekke.appendChild(delNavn);
+                            raekke.appendChild(uKnapper);
+                            underListe.appendChild(raekke);
+                        });
+
+                        // Klik på hoved-knapperne Vis / Skjul
+                        skjulBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            api.hide(gruppe.instanceID);
+                            skjulBtn.classList.add("skjult-aktiv");
+                            alleUnderSkjulKnapper.forEach(function(k) { k.classList.add("skjult-aktiv"); });
+                        };
+
+                        visBtn.onclick = function(e) {
+                            e.stopPropagation();
+                            api.show(gruppe.instanceID);
+                            skjulBtn.classList.remove("skjult-aktiv");
+                            alleUnderSkjulKnapper.forEach(function(k) { k.classList.remove("skjult-aktiv"); });
+                        };
+
