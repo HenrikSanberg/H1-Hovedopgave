@@ -51,39 +51,32 @@ client.init(uid, {
             api.getSceneGraph(function(err, result) {
                 if (err) { navTree.innerHTML = "Fejl ved hentning af lag."; return; }
                 navTree.innerHTML = "";
-                var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model"];
-                var maal = ["VINDUE", "KONSTRUKTION", "UDVENDIGT", "INDVENDIGT"];
+                var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model", "Camera", "Light"];
 
                 function findHovedGrupper(node) {
-                    var liste = [];
-                    function sog(n) {
-                        if (!n) return;
-                        var rent = n.name ? n.name.replace(/_/g, " ").trim().toUpperCase() : "";
-                        if (maal.indexOf(rent) !== -1 && (n.type === "MatrixTransform" || n.type === "Group")) {
-                            liste.push(n);
-                            return;
-                        }
-                        if (n.children) {
-                            for (var i = 0; i < n.children.length; i++) sog(n.children[i]);
+                    if (!node || !node.children) return [];
+                    var gyldige = [];
+                    
+                    for (var i = 0; i < node.children.length; i++) {
+                        var b = node.children[i];
+                        var navn = b.name ? b.name.trim() : "";
+                        var erTeknisk = !navn || 
+                                        ignorer.indexOf(navn) !== -1 || 
+                                        navn.toLowerCase().endsWith(".fbx") || 
+                                        navn.toLowerCase().endsWith(".obj") || 
+                                        navn.startsWith("Mesh") || 
+                                        navn.startsWith("Geometry");
+                                        
+                        if (!erTeknisk) {
+                            gyldige.push(b);
+                        } else if (b.children && b.children.length > 0) {
+                            // Gå ét niveau dybere, hvis vi stadig står ved selve filnavnet eller RootNode
+                            gyldige = gyldige.concat(findHovedGrupper(b));
                         }
                     }
-                    sog(node);
-                    if (liste.length === 0 && node && node.children) {
-                        function findFoersteLag(n) {
-                            if (!n || !n.children) return [];
-                            var res = [];
-                            for (var i = 0; i < n.children.length; i++) {
-                                var b = n.children[i];
-                                var skip = !b.name || ignorer.indexOf(b.name) !== -1 || b.name.toLowerCase().endsWith(".fbx") || b.name.startsWith("Mesh") || b.name.startsWith("Geometry");
-                                if (!skip && (b.type === "MatrixTransform" || b.type === "Group")) res.push(b);
-                                else if (b.children) res = res.concat(findFoersteLag(b));
-                            }
-                            return res;
-                        }
-                        return findFoersteLag(node);
-                    }
-                    return liste;
+                    return gyldige;
                 }
+
 
                 function findUnderDele(node) {
                     var liste = [], seteNavne = {};
