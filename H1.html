@@ -49,100 +49,25 @@ client.init(uid, {
         api.start();
         api.addEventListener("viewerready", function() {
             api.getSceneGraph(function(err, result) {
-                if (err) { navTree.innerHTML = "Fejl ved hentning af lag."; return; }
-                navTree.innerHTML = "";
-                var ignorer = ["RootNode", "root", "Scene", "GLTF", "SketchUp", "Model", "Camera", "Light"];
-
-                function findHovedGrupper(node) {
-                    if (!node || !node.children) return [];
-                    var gyldige = [];
-                    
-                    for (var i = 0; i < node.children.length; i++) {
-                        var b = node.children[i];
-                        var navn = b.name ? b.name.trim() : "";
-                        var erTeknisk = !navn || 
-                                        ignorer.indexOf(navn) !== -1 || 
-                                        navn.toLowerCase().endsWith(".fbx") || 
-                                        navn.toLowerCase().endsWith(".obj") || 
-                                        navn.startsWith("Mesh") || 
-                                        navn.startsWith("Geometry");
-                                        
-                        if (!erTeknisk) {
-                            gyldige.push(b);
-                        } else if (b.children && b.children.length > 0) {
-                            // Gå ét niveau dybere, hvis vi stadig står ved selve filnavnet eller RootNode
-                            gyldige = gyldige.concat(findHovedGrupper(b));
-                        }
-                    }
-                    return gyldige;
-                }
-
-
-                function findUnderDele(node) {
-                    var liste = [], seteNavne = {};
-                    function gennemsog(n) {
-                        if (!n || !n.children) return;
+                if (err) { navTree.innerHTML = "Fejl: " + err; return; }
+                var tekst = "<b>Struktur i din 3ds Max-fil:</b><br><br>";
+                function visAlt(n, dybde) {
+                    if (!n || dybde > 4) return;
+                    var indryk = "&nbsp;&nbsp;&nbsp;&nbsp;".repeat(dybde);
+                    tekst += indryk + "• <b>" + (n.name || "[uden navn]") + "</b> <i>(" + n.type + ")</i><br>";
+                    if (n.children) {
                         for (var i = 0; i < n.children.length; i++) {
-                            var b = n.children[i];
-                            if (b.name && !b.name.startsWith("Mesh") && !b.name.startsWith("Geometry") && (b.type === "MatrixTransform" || b.type === "Group")) {
-                                var rentNavn = b.name.replace(/_/g, " ").trim();
-                                if (!seteNavne[rentNavn]) {
-                                    seteNavne[rentNavn] = { navn: rentNavn, ids: [] };
-                                    liste.push(seteNavn[rentNavn]);
-                                }
-                                seteNavne[rentNavn].ids.push(b.instanceID);
-                            } else gennemsog(b);
+                            visAlt(n.children[i], dybde + 1);
                         }
                     }
-                    gennemsog(node);
-                    return liste;
                 }
-
-                findHovedGrupper(result).forEach(function(gruppe) {
-                    var boks = document.createElement("div"); boks.className = "hoved-gruppe";
-                    var header = document.createElement("div"); header.className = "hoved-header";
-                    var titel = document.createElement("span");
-                    var pil = document.createElement("span"); pil.className = "pil"; pil.innerHTML = "&#9654;";
-                    titel.appendChild(pil);
-                    titel.appendChild(document.createTextNode(gruppe.name.replace(/_/g, " ").toUpperCase()));
-
-                    var knapBoks = document.createElement("div"); knapBoks.className = "knapper";
-                    var visBtn = document.createElement("button"); visBtn.className = "Vis"; visBtn.innerText = "Vis";
-                    var skjulBtn = document.createElement("button"); skjulBtn.className = "Skjul"; skjulBtn.innerText = "Skjul";
-                    knapBoks.appendChild(visBtn); knapBoks.appendChild(skjulBtn);
-                    header.appendChild(titel); header.appendChild(knapBoks);
-                    boks.appendChild(header);
-
-                    var underListe = document.createElement("div"); underListe.className = "under-liste";
-                    var underDele = findUnderDele(gruppe);
-                    var alleUnderSkjulKnapper = [];
-
-                    underDele.forEach(function(del) {
-                        var raekke = document.createElement("div"); raekke.className = "under-raekke";
-                        var delNavn = document.createElement("span"); delNavn.innerText = del.navn;
-                        var uKnapper = document.createElement("div"); uKnapper.className = "knapper";
-                        var uVis = document.createElement("button"); uVis.className = "Vis"; uVis.innerText = "Vis";
-                        var uSkjul = document.createElement("button"); uSkjul.className = "Skjul"; uSkjul.innerText = "Skjul";
-                        alleUnderSkjulKnapper.push(uSkjul);
-
-                        uSkjul.onclick = function(e) { e.stopPropagation(); del.ids.forEach(function(id) { api.hide(id); }); uSkjul.classList.add("skjult-aktiv"); };
-                        uVis.onclick = function(e) { e.stopPropagation(); del.ids.forEach(function(id) { api.show(id); }); uSkjul.classList.remove("skjult-aktiv"); };
-                        uKnapper.appendChild(uVis); uKnapper.appendChild(uSkjul);
-                        raekke.appendChild(delNavn); raekke.appendChild(uKnapper);
-                        underListe.appendChild(raekke);
-                    });
-
-                    skjulBtn.onclick = function(e) { e.stopPropagation(); api.hide(gruppe.instanceID); skjulBtn.classList.add("skjult-aktiv"); alleUnderSkjulKnapper.forEach(function(k) { k.classList.add("skjult-aktiv"); }); };
-                    visBtn.onclick = function(e) { e.stopPropagation(); api.show(gruppe.instanceID); skjulBtn.classList.remove("skjult-aktiv"); alleUnderSkjulKnapper.forEach(function(k) { k.classList.remove("skjult-aktiv"); }); };
-                    header.onclick = function() { if (underDele.length > 0) { underListe.classList.toggle("aaben"); pil.classList.toggle("aaben"); } };
-
-                    if (underDele.length > 0) boks.appendChild(underListe);
-                    navTree.appendChild(boks);
-                });
+                visAlt(result, 0);
+                navTree.innerHTML = tekst;
             });
         });
     }
 });
+
 </script>
 </body>
 </html>
