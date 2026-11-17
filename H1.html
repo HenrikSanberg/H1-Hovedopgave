@@ -70,18 +70,42 @@ window.onload = function() {
 
                     // Find selve hovedmappen (springer .fbx-filnavnet over)
                     function findHovedGrupper(node) {
-                        if (!node || !node.children) return [];
-                        var gyldige = [];
-                        for (var i = 0; i < node.children.length; i++) {
-                            var barn = node.children[i];
-                            var erTeknisk = !barn.name || ignorer.indexOf(barn.name) !== -1 || barn.name.toLowerCase().endsWith(".fbx") || barn.name.startsWith("Mesh") || barn.name.startsWith("Geometry");
-                            if (!erTeknisk && (barn.type === "MatrixTransform" || barn.type === "Group")) {
-                                gyldige.push(barn);
-                            } else if (barn.children) {
-                                gyldige = gyldige.concat(findHovedGrupper(barn));
+                        var liste = [];
+                        var maal = ["VINDUE", "KONSTRUKTION", "UDVENDIGT", "INDVENDIGT"];
+                        
+                        function sog(n) {
+                            if (!n) return;
+                            var rent = n.name ? n.name.replace(/_/g, " ").trim().toUpperCase() : "";
+                            if (maal.indexOf(rent) !== -1 && (n.type === "MatrixTransform" || n.type === "Group")) {
+                                liste.push(n);
+                                return;
+                            }
+                            if (n.children) {
+                                for (var i = 0; i < n.children.length; i++) {
+                                    sog(n.children[i]);
+                                }
                             }
                         }
-                        return gyldige;
+                        sog(node);
+                        
+                        if (liste.length === 0 && node && node.children) {
+                            function findFoersteLag(n) {
+                                if (!n || !n.children) return [];
+                                var res = [];
+                                for (var i = 0; i < n.children.length; i++) {
+                                    var b = n.children[i];
+                                    var skip = !b.name || ignorer.indexOf(b.name) !== -1 || b.name.toLowerCase().endsWith(".fbx") || b.name.startsWith("Mesh") || b.name.startsWith("Geometry");
+                                    if (!skip && (b.type === "MatrixTransform" || b.type === "Group")) {
+                                        res.push(b);
+                                    } else if (b.children) {
+                                        res = res.concat(findFoersteLag(b));
+                                    }
+                                }
+                                return res;
+                            }
+                            return findFoersteLag(node);
+                        }
+                        return liste;
                     }
 
                     // Hent unikke underdele uden dubletter
