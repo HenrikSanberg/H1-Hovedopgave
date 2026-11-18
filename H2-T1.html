@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <script type="text/javascript" src="https://static.sketchfab.com/api/sketchfab-viewer-1.12.1.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 15px; background-color: #f4f6f8; color: #333; }
+    .container { display: flex; flex-wrap: wrap; gap: 20px; }
+    .viewer-box { flex: 2; min-width: 320px; }
+    iframe { width: 100%; height: 550px; border: none; border-radius: 8px; background-color: #e9ecef; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+    .sidebar { flex: 1; min-width: 300px; max-height: 550px; overflow-y: auto; }
+    .gruppe { background: #e9ecef; border-radius: 6px; margin-bottom: 8px; border: 1px solid #d1d5db; overflow: hidden; }
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; font-weight: bold; font-size: 14px; cursor: pointer; user-select: none; }
+    .header:hover { background: #dfe3e8; }
+    .pil { display: inline-block; margin-right: 8px; transition: transform 0.2s; font-size: 11px; }
+    .pil.aaben { transform: rotate(90deg); }
+    .underliste { display: none; background: #fff; padding: 4px 12px 8px 22px; border-top: 1px solid #d1d5db; }
+    .underliste.aaben { display: block; }
+    .raekke { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+    .raekke:last-child { border-bottom: none; }
+    .knapper { display: flex; gap: 5px; flex-shrink: 0; }
+    button { padding: 5px 12px; border: none; border-radius: 4px; color: white; cursor: pointer; font-size: 12px; font-weight: bold; }
+    .raekke button { padding: 3px 9px; font-size: 11px; }
+    .Vis { background-color: #007bff; }
+    .Skjul { background-color: #28a745; }
+    .Skjul.aktiv { background-color: #dc3545; }
+    button:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="viewer-box"><iframe id="api-frame" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen></iframe></div>
+  <div class="sidebar"><div id="navTree">Indlæser bygningsdele...</div></div>
+</div>
+<script>
+var uid = "da48d07bc8f24ae1b993177044ca3ea5"; 
+var navTree = document.getElementById("navTree");
+var client = new window.Sketchfab("1.12.1", document.getElementById("api-frame"));
+
+client.init(uid, {
+    autostart: 1, preload: 1,
+    success: function(api) {
+        api.start();
+        api.addEventListener("viewerready", function() {
+            api.getSceneGraph(function(err, result) {
+                if (err) return;
+                navTree.innerHTML = "";
+
+                function findRoot(n) {
+                    if (!n) return null;
+                    if (n.name === "RootNode" || n.name === "root") return n;
+                    if (n.children) {
+                        for (var i = 0; i < n.children.length; i++) {
+                            var f = findRoot(n.children[i]);
+                            if (f) return f;
+                        }
+                    }
+                    return null;
+                }
+
+                var root = findRoot(result) || result;
+                var grupper = (root.children || []).filter(function(c) {
+                    return c.name && !c.name.startsWith("Mesh") && !c.name.startsWith("Geometry");
+                });
+
+                grupper.forEach(function(g) {
+                    var boks = document.createElement("div"); boks.className = "gruppe";
+                    var head = document.createElement("div"); head.className = "header";
+                    var titel = document.createElement("span");
+                    var pil = document.createElement("span"); pil.className = "pil"; pil.innerHTML = "&#9654;";
+                    titel.appendChild(pil);
+                    titel.appendChild(document.createTextNode(g.name.replace(/_/g, " ").toUpperCase()));
+
+                    var kb = document.createElement("div"); kb.className = "knapper";
+                    var vBtn = document.createElement("button"); vBtn.className = "Vis"; vBtn.innerText = "Vis";
+                    var sBtn = document.createElement("button"); sBtn.className = "Skjul"; sBtn.innerText = "Skjul";
+                    kb.appendChild(vBtn); kb.appendChild(sBtn);
+                    head.appendChild(titel); head.appendChild(kb);
+                    boks.appendChild(head);
+
+                    var uListe = document.createElement("div"); uListe.className = "underliste";
+                    var underDele = (g.children || []).filter(function(u) {
+                        return u.name && !u.name.startsWith("Mesh") && !u.name.startsWith("Geometry");
+                    });
+                    var uSkjulKnapper = [];
+
+                    underDele.forEach(function(u) {
+                        var r = document.createElement("div"); r.className = "raekke";
+                        var nSpan = document.createElement("span"); nSpan.innerText = u.name.replace(/_/g, " ");
+                        var uk = document.createElement("div"); uk.className = "knapper";
+                        var uv = document.createElement("button"); uv.className = "Vis"; uv.innerText = "Vis";
+                        var us = document.createElement("button"); us.className = "Skjul"; us.innerText = "Skjul";
+                        uSkjulKnapper.push(us);
+
+                        us.onclick = function(e) { e.stopPropagation(); api.hide(u.instanceID); us.classList.add("aktiv"); };
+                        uv.onclick = function(e) { e.stopPropagation(); api.show(u.instanceID); us.classList.remove("aktiv"); };
+                        uk.appendChild(uv); uk.appendChild(us);
+                        r.appendChild(nSpan); r.appendChild(uk);
+                        uListe.appendChild(r);
+                    });
+
+                    sBtn.onclick = function(e) { e.stopPropagation(); api.hide(g.instanceID); sBtn.classList.add("aktiv"); uSkjulKnapper.forEach(function(k) { k.classList.add("aktiv"); }); };
+                    vBtn.onclick = function(e) { e.stopPropagation(); api.show(g.instanceID); sBtn.classList.remove("aktiv"); uSkjulKnapper.forEach(function(k) { k.classList.remove("aktiv"); }); };
+                    head.onclick = function() { if (underDele.length > 0) { uListe.classList.toggle("aaben"); pil.classList.toggle("aaben"); } };
+
+                    if (underDele.length > 0) boks.appendChild(uListe);
+                    navTree.appendChild(boks);
+                });
+            });
+        });
+    }
+});
+</script>
+</body>
+</html>
